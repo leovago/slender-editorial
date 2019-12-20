@@ -63,9 +63,8 @@ app.post("/api/exercise/new-user", function (req, res){
     if (userFound) {
       // retrieves stored username
       res.json({
-        "id":userFound._id,
-        "username":userFound.username,
-        "found":"true"
+        "_id":userFound._id,
+        "username":userFound.username
       });
     } else {
       // saves new user to database
@@ -73,21 +72,22 @@ app.post("/api/exercise/new-user", function (req, res){
         username:userName
       });
 
-      user.save(function(err, data){
+      user.save(function(err, userSaved){
         if (err) return console.error(err);
-        console.log(data);
+        //console.log(userSaved);
         res.json({
-          "id":data._id,
-          "username":data.username
+          "_id":userSaved._id,
+          "username":userSaved.username
         });
       });
     }// user found in db
   });
 });
 
+// Add exercise
 app.post("/api/exercise/add", function(req, res){
-  let userName = req.body.userId;
-  let userId = "";
+  let userId = req.body.userId;
+  let userName = "";
   let description = req.body.description;
   let duration = Number(req.body.duration);
   let date = req.body.date;
@@ -103,14 +103,14 @@ app.post("/api/exercise/add", function(req, res){
           "error":"duration should be expressed in numbers, input: " + req.body.duration
         });
       } else {
-        User.findOne({username: userName}, function(err, userFound){
+        User.findById(userId, function(err, userFound){
           if (err) {
             console.error(err);
             return false;
           }
           if (userFound) {
-            // retrieves stored userId
-            userId = userFound._id;
+            // retrieves stored username
+            userName = userFound.username;
             // search for existing exercise
             Exercise.findOne({description: description}, function(err, exerciseFound){
               if (err){
@@ -139,12 +139,11 @@ app.post("/api/exercise/add", function(req, res){
                   if (err) return console.error(err);
                   console.log(data);
                   res.json({
-                    "id":data._id,
-                    "userId":data.userId,
                     "username":userName,
                     "description":data.description,
                     "duration":data.duration,
-                    "date":data.date
+                    "_id":userId,
+                    "date":data.date.toDateString()
                   });
                 });
               } // exercise found in db
@@ -170,6 +169,7 @@ app.post("/api/exercise/add", function(req, res){
   } // date format validation
 });
 
+// delete user
 app.get("/api/exercise/delete-user/:username", function (req, res){
   let userName = req.params.username;
   User.deleteOne({username:userName}, function(err){
@@ -203,10 +203,24 @@ app.get("/api/exercise/delete-exercise/:exercise", function (req, res){
   });  
 });
 
+// GET api/exercise/users
+app.get("/api/exercise/users", function(req, res){
+  User.find({}, function(err, users){
+    if (err){
+      console.error(err);
+    }
+    if (users){
+      console.log(users);
+      res.json({users});
+    }
+  })
+  .select('-__v');
+});
+
 // GET /api/exercise/log?{userId}[&from][&to][&limit]
 app.get("/api/exercise/log", function(req, res){
-  let userName = req.query.userId;
-  let userId = "";
+  let userId = req.query.userId;
+  let userName = "";
   let from = req.query.from;
   let to = req.query.to;
   let limit = Number(req.query.limit) || 10;
@@ -222,14 +236,13 @@ app.get("/api/exercise/log", function(req, res){
     to = new Date(today);
   }
   
-  User.findOne({username: userName}, function(err, userFound){
+  User.findById(userId, function(err, userFound){
     if (err) {
       console.error(err);
       return false;
     }
-    console.log(userFound);
     if (userFound){
-      userId = userFound._id;
+      userName = userFound.username;
 
       // get exercise data
       Exercise.find({
@@ -243,14 +256,20 @@ app.get("/api/exercise/log", function(req, res){
             console.log(exercisesFound);
             if (exercisesFound){
               res.json({
-                "user":userFound,
-                "exercises":exercisesFound
+                "_id":userFound._id,
+                "username":userFound.username,
+                "count":exercisesFound.length,
+                "log":exercisesFound
               });
             }
           })
           .sort({date:'desc', description:'asc'})
           .limit(limit)
           .select('-_id -__v');
+    } else {      
+      res.json({
+        "error":"userId not found in db, userId: " + userId
+      });
     }
   })
   .select('-__v');// User find
